@@ -445,7 +445,7 @@ Return ONLY valid JSON:
     "email": "none | external",
     "storage": "none | local | s3",
     "jobs": "none | local",
-    "admin": true,
+    "admin": false,
     "api": false
   }},
   "secrets_needed": ["ENV_VAR_IF_NEEDED"]
@@ -456,6 +456,7 @@ Rules:
 - Include README.md
 {deploy_note}
 - Prefer the simplest stack that satisfies the spec
+- Set admin=true only when the spec explicitly asks for an admin, staff, backoffice, or moderation interface
 - Files should be enough to build a complete working app
 - Return JSON only, no markdown"""
 
@@ -470,6 +471,37 @@ Rules:
     plan["files"] = files
     plan["app_type"] = str(plan.get("app_type", "web_app"))
     plan["capabilities"] = normalize_capabilities(plan.get("capabilities"), spec)
+    if plan["app_type"] == "static_site":
+        spec_text = spec.lower()
+        explicit_admin = any(word in spec_text for word in ("admin", "moderation", "backoffice", "staff"))
+        explicit_data = any(
+            word in spec_text
+            for word in (
+                "database",
+                "sqlite",
+                "postgres",
+                "save",
+                "saved",
+                "persist",
+                "history",
+                "analytics",
+                "dashboard",
+                "account",
+                "accounts",
+                "user",
+                "users",
+                "login",
+                "log in",
+                "sign in",
+                "signup",
+                "sign up",
+                "authentication",
+            )
+        )
+        if not explicit_admin:
+            plan["capabilities"]["admin"] = False
+        if not explicit_data and plan["capabilities"].get("auth") == "none":
+            plan["capabilities"]["database"] = "none"
     plan["secrets_needed"] = infer_secrets(plan["capabilities"])
     plan["turnkey"] = not bool(plan["secrets_needed"])
     plan["deploy"] = {"slug": slug, "domain": domain}
