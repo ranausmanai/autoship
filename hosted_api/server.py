@@ -27,6 +27,7 @@ MAX_BYTES = int(os.getenv("AUTOSHIP_MAX_BYTES", str(25 * 1024 * 1024)))
 BIND = os.getenv("AUTOSHIP_BIND", "127.0.0.1")
 PORT = int(os.getenv("AUTOSHIP_PORT", "9100"))
 ALLOW_CUSTOM_DOMAINS = os.getenv("AUTOSHIP_ALLOW_CUSTOM_DOMAINS") == "1"
+PUBLIC_BETA = os.getenv("AUTOSHIP_PUBLIC_BETA") == "1"
 TOKENS_PATH = Path(os.getenv("AUTOSHIP_TOKENS_PATH", "/opt/autoship/api/tokens.json"))
 INVITES_PATH = Path(os.getenv("AUTOSHIP_INVITES_PATH", "/opt/autoship/api/invites.json"))
 
@@ -112,6 +113,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def authorized(self):
         tokens = load_tokens()
+        if PUBLIC_BETA:
+            return True
         if not tokens:
             return False
         header = self.headers.get("Authorization", "")
@@ -131,6 +134,7 @@ class Handler(BaseHTTPRequestHandler):
                 "domain": DOMAIN,
                 "deploy_root": DEPLOY_ROOT,
                 "script": str(SCRIPT),
+                "public_beta": PUBLIC_BETA,
             },
         )
 

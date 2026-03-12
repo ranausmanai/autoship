@@ -694,17 +694,19 @@ def remote_deploy(server, slug, domain, email, remote_archive, *, password=None,
 def deploy_via_api(outdir, slug, *, api_url, api_token, domain, email=None):
     archive_path = make_archive(outdir)
     try:
+        headers = {
+            "Content-Type": "application/gzip",
+            "X-Autoship-Slug": slug,
+            "X-Autoship-Domain": domain,
+            "X-Autoship-Email": email or "",
+        }
+        if api_token:
+            headers["Authorization"] = f"Bearer {api_token}"
         request = urllib.request.Request(
             api_url,
             data=archive_path.read_bytes(),
             method="POST",
-            headers={
-                "Authorization": f"Bearer {api_token}",
-                "Content-Type": "application/gzip",
-                "X-Autoship-Slug": slug,
-                "X-Autoship-Domain": domain,
-                "X-Autoship-Email": email or "",
-            },
+            headers=headers,
         )
         with urllib.request.urlopen(request, timeout=900) as resp:
             payload = resp.read().decode()
@@ -732,7 +734,7 @@ def deploy_autoship(
     api_token=None,
 ):
     ensure_deploy_contract(engine, outdir, slug, domain)
-    if api_token:
+    if api_url:
         return deploy_via_api(
             outdir,
             slug,
@@ -756,7 +758,7 @@ def deploy_autoship(
             )
         finally:
             archive_path.unlink(missing_ok=True)
-    die("autoship deploy requires a hosted API token or an operator SSH server target.")
+    die("autoship deploy requires a hosted API URL or an operator SSH server target.")
 
 
 def main():
@@ -802,8 +804,8 @@ def main():
     if args.deploy == "autoship":
         if not domain:
             die("autoship deploy requires a domain.")
-        if not (args.api_token or args.server):
-            die("autoship deploy requires a hosted API token or --server for operator mode.")
+        if not (args.api_url or args.server):
+            die("autoship deploy requires a hosted API URL or --server for operator mode.")
 
     program = PROGRAM.read_text() if PROGRAM.exists() else ""
     updating = is_update(outdir)

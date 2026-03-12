@@ -160,7 +160,15 @@ AutoShip detects the existing build, reads all current files, and applies **only
 
 ### Hosted deploy on autoship.fun
 
-New users do not need to manually set `AUTOSHIP_API_TOKEN`. The intended flow is:
+The smallest public flow is one command:
+
+```bash
+python3 autoship.py spec.md --deploy autoship --slug my-app
+```
+
+If the hosted server is running in public beta mode, that is enough.
+
+If the hosted server is running in invite-only mode, the fallback is:
 
 ```bash
 # Login once with an invite code
@@ -170,7 +178,7 @@ python3 autoship.py login --code SHIP-ABC123
 python3 autoship.py spec.md --deploy autoship --slug my-app
 ```
 
-This stores your deploy token locally at `~/.config/autoship/auth.json`.
+Invite-only login stores your deploy token locally at `~/.config/autoship/auth.json`.
 
 ### Deploy to your own server
 
