@@ -4,13 +4,14 @@
 
 ### Describe it. Ship it.
 
-**One command. Plain English spec. Live deployed app.**
+**Plain English spec. Capability-aware build. Live deployed app.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776ab.svg)](https://www.python.org/)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-Zero-10b981.svg)](#)
-[![Single File](https://img.shields.io/badge/Architecture-Single_File-6366f1.svg)](#)
-[![Lines of Code](https://img.shields.io/badge/Lines-~830-f59e0b.svg)](#)
+[![Hosted Deploy](https://img.shields.io/badge/Deploy-autoship.fun-e65a2f.svg)](#)
+[![Invite Login](https://img.shields.io/badge/Login-Invite_Code-0f766e.svg)](#)
+[![Lines of Code](https://img.shields.io/badge/Engine-~930_LOC-f59e0b.svg)](#)
 
 <br/>
 
@@ -35,7 +36,7 @@ AutoShip is an autonomous app builder. You write a plain English spec, and it:
 4. **Deploys** — Dockerizes, deploys, configures SSL → hands you a live URL
 5. **Updates** — run again with a change request, same URL, only the diff applied
 
-All in **~830 lines of Python**. Zero dependencies. One file.
+The core engine is still a single small Python CLI with zero third-party Python dependencies.
 
 ## 🤔 Why AutoShip?
 
@@ -157,17 +158,32 @@ AutoShip detects the existing build, reads all current files, and applies **only
 
 ## 🌐 Deploy to a Live URL
 
-```bash
-# Deploy with hosted API
-export AUTOSHIP_API_TOKEN=your_token
-python3 autoship.py spec.md --deploy autoship --slug my-app
+### Hosted deploy on autoship.fun
 
-# Or deploy to your own server
+New users do not need to manually set `AUTOSHIP_API_TOKEN`. The intended flow is:
+
+```bash
+# Login once with an invite code
+python3 autoship.py login --code SHIP-ABC123
+
+# Then deploy normally
+python3 autoship.py spec.md --deploy autoship --slug my-app
+```
+
+This stores your deploy token locally at `~/.config/autoship/auth.json`.
+
+### Deploy to your own server
+
+```bash
+# Operator/self-host path
 python3 autoship.py spec.md --deploy autoship \
   --server root@your-server.com \
   --domain yourdomain.com \
-  --slug my-app
+  --slug my-app \
+  --ssh-key ~/.ssh/my_key
 ```
+
+The self-host path does: tarball -> SCP -> Docker build -> container start -> Nginx proxy -> SSL cert.
 
 ```
   [1/3] Planning... web_app / flask
@@ -271,6 +287,13 @@ Options:
   --api-token TOKEN       Hosted deploy API token (or AUTOSHIP_API_TOKEN)
 ```
 
+### Login commands
+
+```bash
+python3 autoship.py login --code SHIP-ABC123
+python3 autoship.py logout
+```
+
 ## 🎯 Use Cases
 
 **🏗️ Instant Prototyping**
@@ -292,20 +315,29 @@ Need a quick form, a survey tool, a landing page? AutoShip it, use it, move on. 
 
 ```
 autoship/
-├── autoship.py      # The entire engine (~830 lines)
-├── program.md       # Agent system prompt — the AI agent's instructions
-├── example.md       # Sample spec — try it: python3 autoship.py example.md
-├── LICENSE
+├── autoship.py              # Main CLI: plan, build, retry, update, deploy
+├── deploy_release.sh        # Shared release deploy script
+├── hosted_api/              # Private autoship.fun service example
+│   ├── server.py
+│   ├── issue_invite.py
+│   └── autoship-api.service
+├── site/                    # Static autoship.fun landing page
+│   ├── index.html
+│   ├── styles.css
+│   ├── favicon.svg
+│   └── og-card.svg
+├── program.md               # Agent instructions
+├── example.md               # Sample spec
 └── README.md
 ```
 
-That's the whole project. Three working files:
+The OSS split is:
 
-- **`autoship.py`** — the orchestrator. Handles planning, agent spawning, verification, retry, and deployment. This is the only code.
-- **`program.md`** — the agent's brain. 28 lines of plain English that tell the AI how to behave: pick simple stacks, write complete files, test locally, fix errors. You can edit this to change the agent's personality.
-- **`example.md`** — a sample spec to try right away. Write your own `.md` file in the same format to build anything.
+- `autoship.py` is the public client.
+- `hosted_api/` is the private-service reference implementation.
+- `site/` is the root landing page for `autoship.fun`.
 
-No frameworks, no build tools, no config files, no abstractions.
+Secrets, tokens, and VPS env files stay out of the repo.
 
 ## 🤝 Contributing
 

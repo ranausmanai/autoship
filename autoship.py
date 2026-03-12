@@ -2,6 +2,7 @@
 """autoship — describe it, ship it.
 
 Usage:
+  python3 autoship.py login --code SHIP-ABC123            # claim hosted deploy access
   python3 autoship.py spec.md                              # fresh build
   python3 autoship.py spec.md -o myapp                     # custom output dir
   python3 autoship.py spec.md -e codex --deploy autoship   # build & deploy
@@ -15,6 +16,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -26,6 +28,7 @@ PROGRAM = Path(__file__).with_name("program.md")
 DEPLOY_SCRIPT = Path(__file__).with_name("deploy_release.sh")
 DEPLOY_ROOT = "/opt/autoship"
 DEFAULT_AUTOSHIP_API_URL = "https://api.autoship.fun/deploy"
+DEFAULT_AUTOSHIP_LOGIN_URL = "https://api.autoship.fun/claim"
 SSH_KNOWN_HOST_OPTS = [
     "-o", "StrictHostKeyChecking=no",
     "-o", "UserKnownHostsFile=/dev/null",
@@ -40,6 +43,8 @@ ARCHIVE_EXCLUDES = {
 CODEX_REASONING = 'model_reasoning_effort="medium"'
 PLAN_FILE = "autoship.plan.json"
 SPEC_FILE = "autoship.spec.md"
+AUTH_DIR = Path.home() / ".config" / "autoship"
+AUTH_FILE = AUTH_DIR / "auth.json"
 
 
 def die(message):
@@ -166,6 +171,76 @@ def init_git(outdir):
         run(["git", "init"], cwd=str(outdir.resolve()), capture=True)
 
 
+def read_saved_auth():
+    if not AUTH_FILE.exists():
+        return {}
+    try:
+        data = json.loads(AUTH_FILE.read_text())
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def write_saved_auth(data):
+    AUTH_DIR.mkdir(parents=True, exist_ok=True)
+    AUTH_FILE.write_text(json.dumps(data, indent=2) + "\n")
+
+
+def claim_invite_code(code, *, login_url):
+    body = json.dumps({"code": code.strip()}).encode()
+    request = urllib.request.Request(
+        login_url,
+        data=body,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as resp:
+            payload = resp.read().decode()
+        data = json.loads(payload)
+    except urllib.error.HTTPError as exc:
+        details = exc.read().decode(errors="replace").strip()
+        raise SystemExit(f"Login failed ({exc.code}):\n{details}") from exc
+    except urllib.error.URLError as exc:
+        raise SystemExit(f"Login failed:\n{exc}") from exc
+    if not isinstance(data, dict) or "token" not in data:
+        raise SystemExit("Login failed: invalid claim response.")
+    return data
+
+
+def login_command(argv):
+    p = argparse.ArgumentParser(description="autoship login")
+    p.add_argument("--code", default=None, help="invite code from autoship.fun")
+    p.add_argument("--login-url", default=os.getenv("AUTOSHIP_LOGIN_URL", DEFAULT_AUTOSHIP_LOGIN_URL))
+    args = p.parse_args(argv)
+
+    code = (args.code or "").strip()
+    if not code:
+        code = input("Invite code: ").strip()
+    if not code:
+        die("Invite code is required.")
+
+    result = claim_invite_code(code, login_url=args.login_url)
+    auth = {
+        "api_token": result["token"],
+        "api_url": result.get("api_url", DEFAULT_AUTOSHIP_API_URL),
+        "domain": result.get("domain", "autoship.fun"),
+        "claimed_at": int(time.time()),
+    }
+    write_saved_auth(auth)
+
+    print("autoship login complete")
+    print(f"  token saved to {AUTH_FILE}")
+    print(f"  deploy api: {auth['api_url']}")
+    print(f"  domain:     {auth['domain']}")
+
+
+def logout_command(argv):
+    argparse.ArgumentParser(description="autoship logout").parse_args(argv)
+    AUTH_FILE.unlink(missing_ok=True)
+    print("autoship login removed")
+
+
 def heuristic_capabilities(spec):
     text = spec.lower()
     has = lambda *words: any(word in text for word in words)
@@ -249,6 +324,17 @@ def write_plan_file(outdir, plan):
     (outdir / PLAN_FILE).write_text(json.dumps(plan, indent=2) + "\n")
 
 
+def read_plan_file(outdir):
+    path = outdir / PLAN_FILE
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def plan_build(spec, *, deploy, slug, domain, engine, workdir):
     deploy_files = ["Dockerfile", "autoship.json"] if deploy == "autoship" else []
     deploy_note = ""
@@ -305,6 +391,7 @@ Rules:
     plan["capabilities"] = normalize_capabilities(plan.get("capabilities"), spec)
     plan["secrets_needed"] = infer_secrets(plan["capabilities"])
     plan["turnkey"] = not bool(plan["secrets_needed"])
+    plan["deploy"] = {"slug": slug, "domain": domain}
     return plan
 
 
@@ -673,6 +760,13 @@ def deploy_autoship(
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "login":
+        login_command(sys.argv[2:])
+        return
+    if len(sys.argv) > 1 and sys.argv[1] == "logout":
+        logout_command(sys.argv[2:])
+        return
+
     p = argparse.ArgumentParser(description="autoship — describe it, ship it")
     p.add_argument("spec", help="path to spec or change-request file (.md or .txt)")
     p.add_argument("-o", "--output", default=None, help="output directory name")
@@ -687,17 +781,27 @@ def main():
     p.add_argument("--api-token", default=os.getenv("AUTOSHIP_API_TOKEN"), help="hosted autoship deploy token")
     args = p.parse_args()
 
+    saved_auth = read_saved_auth()
+    if not args.api_token:
+        args.api_token = saved_auth.get("api_token")
+    if args.api_url == DEFAULT_AUTOSHIP_API_URL and saved_auth.get("api_url"):
+        args.api_url = saved_auth["api_url"]
+    if args.domain == "autoship.fun" and saved_auth.get("domain"):
+        args.domain = saved_auth["domain"]
+
     spec_path = Path(args.spec)
     spec_text = spec_path.read_text()
     outdir = Path(args.output or f"ship_{spec_path.stem}")
     outdir.mkdir(exist_ok=True)
     init_git(outdir)
 
-    slug = slugify(args.slug or outdir.name.replace("ship_", "", 1))
-    domain = args.domain or "example.com"
+    existing_plan = read_plan_file(outdir)
+    existing_deploy = (existing_plan or {}).get("deploy") or {}
+    slug = slugify(args.slug or existing_deploy.get("slug") or outdir.name.replace("ship_", "", 1))
+    domain = args.domain or existing_deploy.get("domain") or "autoship.fun"
     if args.deploy == "autoship":
-        if not args.domain:
-            die("autoship deploy requires --domain or AUTOSHIP_DOMAIN.")
+        if not domain:
+            die("autoship deploy requires a domain.")
         if not (args.api_token or args.server):
             die("autoship deploy requires a hosted API token or --server for operator mode.")
 
@@ -708,7 +812,8 @@ def main():
     if updating:
         mode = "update"
         original_spec = (outdir / SPEC_FILE).read_text()
-        plan = json.loads((outdir / PLAN_FILE).read_text())
+        plan = existing_plan or json.loads((outdir / PLAN_FILE).read_text())
+        plan["deploy"] = {"slug": slug, "domain": domain}
         existing_files = list_app_files(outdir)
 
         print(f"""
@@ -738,8 +843,10 @@ def main():
             plan=plan,
             existing_files=existing_files,
         )
-        build_with_retries(args.engine, prompt, outdir, plan, progress=progress)
+        if not build_with_retries(args.engine, prompt, outdir, plan, progress=progress):
+            die("Update failed after retries; refusing to deploy a partial build.")
         progress.done()
+        write_plan_file(outdir, plan)
 
     else:
         mode = "build"
@@ -784,7 +891,8 @@ def main():
             domain=domain,
             plan=plan,
         )
-        build_with_retries(args.engine, prompt, outdir, plan, progress=progress)
+        if not build_with_retries(args.engine, prompt, outdir, plan, progress=progress):
+            die("Build failed after retries; refusing to deploy a partial build.")
         write_plan_file(outdir, plan)
         (outdir / SPEC_FILE).write_text(spec_text)
         progress.done()
@@ -797,7 +905,7 @@ def main():
             slug,
             engine=args.engine,
             server=args.server,
-            domain=args.domain,
+            domain=domain,
             password=os.getenv("AUTOSHIP_SSH_PASSWORD"),
             key=args.ssh_key,
             email=args.email,
