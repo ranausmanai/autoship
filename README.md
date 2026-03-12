@@ -71,42 +71,45 @@ You need one of these AI backends installed:
 
 ## 🏁 Quick Start
 
-### 1. Write a spec
+### 1. Try the included example
+
+The repo ships with `example.md` — a sample spec for a habit tracker app. Try it immediately:
+
+```bash
+python3 autoship.py example.md
+```
+
+Or write your own spec — any markdown file describing what you want:
 
 ```markdown
-# Spec: Habit Tracker
+# Spec: Budget Tracker
 
-A simple, beautiful habit tracker web app.
+A simple web app to track daily expenses.
 
 ## Features
-- Add habits with a name and target frequency (daily, weekly)
-- Check off habits each day with a satisfying click
-- See a streak counter for each habit
-- Simple dashboard showing today's habits and completion rate
+- Add expenses with amount, category, and date
+- See a pie chart breakdown by category
+- Monthly totals and daily average
 - Data persists in localStorage
 
 ## Design
 - Clean, minimal UI
-- Dark mode by default
-- Smooth animations on check-off
 - Mobile-friendly
 ```
 
-### 2. Build it
-
 ```bash
-python3 autoship.py spec.md
+python3 autoship.py my-spec.md
 ```
 
-### 3. Watch it work
+### 2. Watch it work
 
 ```
 ============================================================
   autoship — describe it, ship it
 ============================================================
-  spec:    spec.md
+  spec:    example.md
   engine:  claude
-  output:  ship_spec/
+  output:  ship_example/
   deploy:  none
 ============================================================
 
@@ -117,11 +120,11 @@ python3 autoship.py spec.md
   [2/2] Building... done
 
 ============================================================
-  SHIPPED -> ship_spec/
+  SHIPPED -> ship_example/
 ============================================================
 ```
 
-Your app is in `ship_spec/`. Open `index.html` or run the start command.
+Your app is in `ship_example/`. Open `index.html` or run the start command.
 
 ## 🔄 Iterative Updates
 
@@ -290,13 +293,19 @@ Need a quick form, a survey tool, a landing page? AutoShip it, use it, move on. 
 ```
 autoship/
 ├── autoship.py      # The entire engine (~830 lines)
-├── program.md       # Agent instructions (28 lines)
-├── example.md       # Sample spec to try
+├── program.md       # Agent system prompt — the AI agent's instructions
+├── example.md       # Sample spec — try it: python3 autoship.py example.md
 ├── LICENSE
 └── README.md
 ```
 
-That's the whole project. No frameworks, no build tools, no config files, no abstractions.
+That's the whole project. Three working files:
+
+- **`autoship.py`** — the orchestrator. Handles planning, agent spawning, verification, retry, and deployment. This is the only code.
+- **`program.md`** — the agent's brain. 28 lines of plain English that tell the AI how to behave: pick simple stacks, write complete files, test locally, fix errors. You can edit this to change the agent's personality.
+- **`example.md`** — a sample spec to try right away. Write your own `.md` file in the same format to build anything.
+
+No frameworks, no build tools, no config files, no abstractions.
 
 ## 🤝 Contributing
 
