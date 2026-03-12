@@ -21,7 +21,9 @@ import tarfile
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+import webbrowser
 from pathlib import Path
 
 PROGRAM = Path(__file__).with_name("program.md")
@@ -97,6 +99,14 @@ def run(cmd, *, cwd=None, env=None, capture=False, check=True, input_text=None):
         capture_output=capture,
         check=check,
     )
+
+
+def ask_yes_no(prompt, *, default=False):
+    suffix = " [Y/n]: " if default else " [y/N]: "
+    answer = input(prompt + suffix).strip().lower()
+    if not answer:
+        return default
+    return answer in {"y", "yes"}
 
 
 def extract_json(text):
@@ -206,6 +216,77 @@ def claim_invite_code(code, *, login_url):
     if not isinstance(data, dict) or "token" not in data:
         raise SystemExit("Login failed: invalid claim response.")
     return data
+
+
+def api_root_url(api_url):
+    parsed = urllib.parse.urlsplit(api_url)
+    path = parsed.path.rstrip("/")
+    if path.endswith("/deploy"):
+        path = path[:-7]
+    return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
+
+
+def start_browser_pair(api_url):
+    start_url = api_root_url(api_url).rstrip("/") + "/authorize/start"
+    request = urllib.request.Request(
+        start_url,
+        data=b"{}",
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as resp:
+            payload = resp.read().decode()
+        data = json.loads(payload)
+    except urllib.error.HTTPError as exc:
+        details = exc.read().decode(errors="replace").strip()
+        raise SystemExit(f"Browser connect failed ({exc.code}):\n{details}") from exc
+    except urllib.error.URLError as exc:
+        raise SystemExit(f"Browser connect failed:\n{exc}") from exc
+
+    approve_url = data.get("approve_url")
+    poll_url = data.get("poll_url")
+    if not approve_url or not poll_url:
+        raise SystemExit("Browser connect failed: invalid authorize/start response.")
+
+    print("  Connect this CLI on autoship.fun...")
+    if data.get("code"):
+        print(f"  CODE:       {data['code']}")
+    print(f"  BROWSER:    {approve_url}")
+    try:
+        webbrowser.open(approve_url)
+    except Exception:
+        pass
+
+    deadline = time.time() + int(data.get("expires_in", 300))
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(poll_url, timeout=30) as resp:
+                payload = resp.read().decode()
+                status = resp.status
+        except urllib.error.HTTPError as exc:
+            if exc.code == 202:
+                time.sleep(2)
+                continue
+            details = exc.read().decode(errors="replace").strip()
+            raise SystemExit(f"Browser connect failed ({exc.code}):\n{details}") from exc
+        except urllib.error.URLError as exc:
+            raise SystemExit(f"Browser connect failed:\n{exc}") from exc
+
+        data = json.loads(payload)
+        if status == 200 and data.get("token"):
+            auth = {
+                "api_token": data["token"],
+                "api_url": data.get("api_url", api_url),
+                "domain": data.get("domain", "autoship.fun"),
+                "claimed_at": int(time.time()),
+            }
+            write_saved_auth(auth)
+            print(f"  CONNECTED:  {auth['domain']}")
+            return auth
+        time.sleep(2)
+
+    raise SystemExit("Browser connect timed out. Re-run the command to try again.")
 
 
 def login_command(argv):
@@ -782,6 +863,10 @@ def main():
     p.add_argument("--api-url", default=os.getenv("AUTOSHIP_API_URL", DEFAULT_AUTOSHIP_API_URL), help="hosted autoship deploy API URL")
     p.add_argument("--api-token", default=os.getenv("AUTOSHIP_API_TOKEN"), help="hosted autoship deploy token")
     args = p.parse_args()
+    interactive = sys.stdin.isatty() and sys.stdout.isatty()
+
+    if args.deploy == "none" and interactive and ask_yes_no("Deploy to autoship.fun after build?", default=False):
+        args.deploy = "autoship"
 
     saved_auth = read_saved_auth()
     if not args.api_token:
@@ -790,6 +875,11 @@ def main():
         args.api_url = saved_auth["api_url"]
     if args.domain == "autoship.fun" and saved_auth.get("domain"):
         args.domain = saved_auth["domain"]
+    if args.deploy == "autoship" and interactive and not args.server and not args.api_token:
+        auth = start_browser_pair(args.api_url)
+        args.api_token = auth.get("api_token")
+        args.api_url = auth.get("api_url", args.api_url)
+        args.domain = auth.get("domain", args.domain)
 
     spec_path = Path(args.spec)
     spec_text = spec_path.read_text()

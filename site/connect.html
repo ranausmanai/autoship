@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Connect autoship CLI</title>
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      body { display: grid; place-items: center; min-height: 100vh; }
+      .connect-card {
+        width: min(720px, calc(100vw - 24px));
+        padding: 32px;
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+      .connect-code {
+        display: inline-flex;
+        margin: 16px 0 18px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: var(--surface-strong);
+        border: 1px solid var(--line);
+        font-family: "IBM Plex Mono", monospace;
+        letter-spacing: 0.08em;
+      }
+      .connect-status { color: var(--muted); line-height: 1.7; }
+      .connect-actions { margin-top: 22px; display: flex; gap: 12px; flex-wrap: wrap; }
+      .connect-actions button {
+        min-height: 48px;
+        padding: 0 18px;
+        border: 0;
+        border-radius: 999px;
+        background: var(--accent);
+        color: white;
+        font: inherit;
+        cursor: pointer;
+      }
+      .connect-actions a {
+        display: inline-flex;
+        align-items: center;
+        padding: 0 18px;
+        min-height: 48px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+      }
+      .connect-card.ok button { display: none; }
+      .connect-card.ok .connect-status { color: var(--accent-deep); }
+    </style>
+  </head>
+  <body>
+    <main class="connect-card" id="card">
+      <p class="eyebrow">autoship.fun</p>
+      <h1 style="font-size: clamp(2rem, 4vw, 3.3rem); max-width: none;">Connect this browser to your terminal</h1>
+      <p class="connect-status" id="status">
+        This will pair the terminal command you just ran with <code>autoship.fun</code> and let the CLI continue the deploy.
+      </p>
+      <div class="connect-code" id="code">Waiting for session…</div>
+      <div class="connect-actions">
+        <button id="approve">Connect CLI</button>
+        <a href="/">Back to autoship</a>
+      </div>
+    </main>
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const session = params.get("session") || "";
+      const code = params.get("code") || "";
+      const codeEl = document.getElementById("code");
+      const statusEl = document.getElementById("status");
+      const approveBtn = document.getElementById("approve");
+      const card = document.getElementById("card");
+
+      if (code) codeEl.textContent = code;
+      if (!session) {
+        statusEl.textContent = "Missing session. Go back to your terminal and run the command again.";
+        approveBtn.disabled = true;
+      } else {
+        statusEl.textContent = "Connecting your CLI…";
+      }
+
+      async function approve() {
+        approveBtn.disabled = true;
+        statusEl.textContent = "Connecting your CLI…";
+        try {
+          const resp = await fetch("https://api.autoship.fun/authorize/complete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session })
+          });
+          const data = await resp.json();
+          if (!resp.ok || !data.ok) throw new Error(data.error || "connect_failed");
+          card.classList.add("ok");
+          statusEl.textContent = "Connected. You can go back to your terminal now.";
+          codeEl.textContent = "CLI connected";
+        } catch (err) {
+          approveBtn.disabled = false;
+          statusEl.textContent = "Could not connect this CLI. Go back to your terminal and retry.";
+        }
+      }
+
+      approveBtn.addEventListener("click", approve);
+      if (session) approve();
+    </script>
+  </body>
+</html>

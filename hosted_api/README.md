@@ -4,10 +4,11 @@ This is the private deploy service behind `--deploy autoship`.
 
 The open-source CLI does not need VPS credentials. It:
 
-1. Logs in once with an invite code to get a stored deploy token
-2. Builds the app locally with `codex` or `claude`
-3. Packages the output directory into a tarball
-4. Uploads the bundle to this API with a bearer token
+1. Starts a short browser pairing flow on first hosted deploy
+2. Stores the returned deploy token locally
+3. Builds the app locally with `codex` or `claude`
+4. Packages the output directory into a tarball
+5. Uploads the bundle to this API with a bearer token
 
 The private API then:
 
@@ -43,6 +44,7 @@ Optional file-backed auth state:
 ```bash
 touch /opt/autoship/api/tokens.json
 touch /opt/autoship/api/invites.json
+touch /opt/autoship/api/pairings.json
 ```
 
 Install and start:
@@ -69,11 +71,19 @@ User claims it locally:
 python3 autoship.py login --code SHIP-ABC123
 ```
 
+## Browser pairing flow
+
+The simpler hosted UX is:
+
+1. User runs `python3 autoship.py spec.md --deploy autoship`
+2. CLI opens `https://autoship.fun/connect.html?...`
+3. User approves the pairing page
+4. CLI polls `/authorize/poll`, stores the token locally, and continues
+
 ## OSS client usage
 
 ```bash
-python3 autoship.py login --code SHIP-ABC123
 python3 autoship.py spec.md -e codex --deploy autoship
 ```
 
-The client stores the claimed token at `~/.config/autoship/auth.json` and uses `https://api.autoship.fun/deploy` by default.
+The client stores the paired token at `~/.config/autoship/auth.json` and uses `https://api.autoship.fun/deploy` by default.

@@ -114,15 +114,14 @@ LIVE URL:  https://my-app.autoship.fun</code></pre>
         <section class="split" id="use">
           <article class="panel wide">
             <p class="panel-kicker">Usage</p>
-            <h2>Login once, then deploy</h2>
+            <h2>Run it. Pair browser once. Deploy.</h2>
             <pre><code>git clone https://github.com/ranausmanai/autoship
 cd autoship/autoship
 
-python3 autoship.py login --code SHIP-ABC123
 python3 autoship.py spec.md -e codex --deploy autoship --slug my-app</code></pre>
             <p class="small">
-              You need an invite code once, plus either the <code>codex</code> CLI or <code>claude</code> CLI installed locally.
-              After login, autoship stores your deploy token locally and future deploys just use <code>--deploy autoship</code>.
+              On first hosted deploy, autoship can open <code>autoship.fun</code> in your browser, pair that terminal,
+              save the token locally, and continue the deploy automatically. After that, future deploys just work.
             </p>
           </article>
 
@@ -144,11 +143,10 @@ Make it clean and mobile-friendly.</code></pre>
         <section class="grid" id="notes">
           <article class="panel">
             <p class="panel-kicker">Getting Access</p>
-            <h2>Invite-code beta</h2>
+            <h2>Browser pairing</h2>
             <p>
-              autoship.fun hosted deploy is running as an invite-code beta. You claim a one-time code with
-              <code>autoship login</code>, the CLI stores your deploy token locally, and then regular deploys
-              no longer need environment variables.
+              The CLI can open a short pairing page on <code>autoship.fun</code>, create a deploy token for that terminal,
+              store it locally, and continue without making users manually hunt for API keys.
             </p>
           </article>
 

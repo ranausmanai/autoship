@@ -166,9 +166,9 @@ The smallest public flow is one command:
 python3 autoship.py spec.md --deploy autoship --slug my-app
 ```
 
-If the hosted server is running in public beta mode, that is enough.
+On first use, autoship can open `autoship.fun` in your browser, pair that terminal, and continue automatically.
 
-If the hosted server is running in invite-only mode, the fallback is:
+If you are running the hosted service in a stricter mode, the fallback is:
 
 ```bash
 # Login once with an invite code
@@ -178,7 +178,7 @@ python3 autoship.py login --code SHIP-ABC123
 python3 autoship.py spec.md --deploy autoship --slug my-app
 ```
 
-Invite-only login stores your deploy token locally at `~/.config/autoship/auth.json`.
+The browser pairing flow stores your deploy token locally at `~/.config/autoship/auth.json`.
 
 ### Deploy to your own server
 
@@ -295,7 +295,7 @@ Options:
   --api-token TOKEN       Hosted deploy API token (or AUTOSHIP_API_TOKEN)
 ```
 
-### Login commands
+### Optional manual login commands
 
 ```bash
 python3 autoship.py login --code SHIP-ABC123
